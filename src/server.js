@@ -19,7 +19,7 @@ app.use(fileUpload());
 app.use(express.static(path.resolve(__dirname, '../public')));
 
 const port = process.env.PORT || 3000;
-const front_port = process.env.REACT_PORT || 'http://localhost:3001';
+const front_port = process.env.REACT_PORT; // || 'http://localhost:3001';
 
 app.use(
   cors({
