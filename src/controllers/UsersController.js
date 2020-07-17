@@ -367,7 +367,7 @@ class UsersController {
     }-${new Date().getMilliseconds()}.${extension}`;
 
     image.mv(
-      path.resolve(__dirname, 'public/uploads/users/' + new_image_name),
+      path.resolve(__dirname, '../../public/uploads/users/' + new_image_name),
       (err) => {
         if (err)
           return res.status(500).json({
