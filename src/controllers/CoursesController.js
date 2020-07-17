@@ -1,16 +1,16 @@
-"use strict";
-const dbConnection = require("../../config/mysql");
-const CoursesTransformer = require("../transformers/CoursesTransformer");
-const util = require("util");
-const { addDayWithoutFormat, dateParse } = require("../utils/dateParse");
-const nodemailer = require("nodemailer");
-const hbs = require("nodemailer-express-handlebars");
-const jwt = require("jsonwebtoken");
-const path = require("path");
-const fs = require("fs");
-const webPay = require('../../config/webPay')
-var transactions = {}
-require("../../config/enviroments");
+'use strict';
+const dbConnection = require('../../config/mysql');
+const CoursesTransformer = require('../transformers/CoursesTransformer');
+const util = require('util');
+const { addDayWithoutFormat, dateParse } = require('../utils/dateParse');
+const nodemailer = require('nodemailer');
+const hbs = require('nodemailer-express-handlebars');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
+const webPay = require('../../config/webPay');
+var transactions = {};
+require('../../config/enviroments');
 
 class CoursesController {
   constructor() {
@@ -46,81 +46,85 @@ class CoursesController {
 
   validURL(str) {
     var pattern = new RegExp(
-      "^(https?:\\/\\/)?" + // protocol
-      "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|" + // domain name
-      "((\\d{1,3}\\.){3}\\d{1,3}))" + // OR ip (v4) address
-      "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*" + // port and path
-      "(\\?[;&a-z\\d%_.~+=-]*)?" + // query string
-        "(\\#[-a-z\\d_]*)?$",
-      "i"
+      '^(https?:\\/\\/)?' + // protocol
+      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
+      '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR ip (v4) address
+      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path
+      '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
+        '(\\#[-a-z\\d_]*)?$',
+      'i'
     ); // fragment locator
     return !!pattern.test(str);
   }
 
-  async getUserOrderCount(req){
-
+  async getUserOrderCount(req) {
     const query = util.promisify(this.connection.query).bind(this.connection);
 
-    let result = await query(`SELECT COUNT(*) as orderCount FROM course_user WHERE user_id=${req.usuario.id}`);
+    let result = await query(
+      `SELECT COUNT(*) as orderCount FROM course_user WHERE user_id=${req.usuario.id}`
+    );
 
-    console.log(result)
+    console.log(result);
 
-    if(result[0].orderCount === 0)
-      result[0].orderCount = 1;
+    if (result[0].orderCount === 0) result[0].orderCount = 1;
 
     return result[0].orderCount;
-
   }
 
-  async startWebPayTransaction (req, res) {
+  async startWebPayTransaction(req, res) {
     let Webpay = webPay();
-    let url = process.env.NODE_URL || "http://localhost:3000";
-    let amount = 1500
-    let orderCount =  await this.getUserOrderCount(req)
-    
+    let url = process.env.NODE_URL || 'http://localhost:3000';
+    let amount = 1500;
+    let orderCount = await this.getUserOrderCount(req);
+
     Webpay.initTransaction(
       amount,
-      "Orden" + orderCount.toString(),
+      'Orden' + orderCount.toString(),
       req.sessionId,
-      url + "/courses/webpay-normal/response",
-      url + "/courses/webpay-normal/finish").then((data) => {
-      transactions[data.token] = { amount: amount }
-      console.log(transactions)
-      res.json(
-        { url: data.url, token: data.token, inputName: "TBK_TOKEN" })
-    })
+      url + '/courses/webpay-normal/response',
+      url + '/courses/webpay-normal/finish'
+    ).then((data) => {
+      transactions[data.token] = { amount: amount };
+      console.log(transactions);
+      res.json({ url: data.url, token: data.token, inputName: 'TBK_TOKEN' });
+    });
   }
 
-  async responseWebPay (req, res) {
+  async responseWebPay(req, res) {
     let Webpay = webPay();
 
-    let token = Object.keys(transactions)[0]
-    
-    Webpay.getTransactionResult(token).then(response => {
-      transactions[token] = response
-      console.log(response)
-      res.render("redirect-transbank",
-        { url: response.urlRedirection, token, inputName: "token_ws" })
-    }).catch((e) => {
-      console.log(e)
-      res.send("Error")
-    })
+    let token = Object.keys(transactions)[0];
+
+    Webpay.getTransactionResult(token)
+      .then((response) => {
+        transactions[token] = response;
+        console.log(response);
+        res.render('redirect-transbank', {
+          url: response.urlRedirection,
+          token,
+          inputName: 'token_ws',
+        });
+      })
+      .catch((e) => {
+        console.log(e);
+        res.send('Error');
+      });
   }
 
-  async finish (req, res) {
+  async finish(req, res) {
     let status = null;
     let transaction = null;
 
-    let token = Object.keys(transactions)[0]
+    let token = Object.keys(transactions)[0];
 
     // Si se recibe TBK_TOKEN en vez de token_ws, la compra fue anulada por el usuario
-    if (typeof req.body.TBK_TOKEN !== "undefined") {
+    if (typeof req.body.TBK_TOKEN !== 'undefined') {
       status = 'ABORTED';
     }
 
-    if (typeof token !== "undefined") {
+    if (typeof token !== 'undefined') {
       transaction = transactions[token];
-      console.log(transaction.detailOutput[0].responseCode)
+      console.log(transaction.detailOutput[0].responseCode);
       if (transaction.detailOutput[0].responseCode === 0) {
         status = 'AUTHORIZED';
       } else {
@@ -130,10 +134,10 @@ class CoursesController {
 
     // Si no se recibió ni token_ws ni TBK_TOKEN, es un usuario que entró directo
     if (status === null) {
-      return res.status(404).send("Not found.");
+      return res.status(404).send('Not found.');
     }
 
-    return res.render("finish", { transaction, status })
+    return res.render('finish', { transaction, status });
   }
 
   async uppload(req, res, next) {
@@ -157,38 +161,38 @@ class CoursesController {
       offer_price,
     } = req.body;
 
-    req.checkBody("name", "El titulo es requerido.").notEmpty();
+    req.checkBody('name', 'El titulo es requerido.').notEmpty();
     req
-      .checkBody("provider", "El nombre del profesor es necesario.")
+      .checkBody('provider', 'El nombre del profesor es necesario.')
       .notEmpty();
-    if (is_in_offer === "1") {
+    if (is_in_offer === '1') {
       req
-        .checkBody("offer_price", "El precio de oferta del curso es necesario.")
+        .checkBody('offer_price', 'El precio de oferta del curso es necesario.')
         .notEmpty();
     }
-    req.checkBody("price", "El precio del curso es necesario.").notEmpty();
-    if (with_date === "1") {
+    req.checkBody('price', 'El precio del curso es necesario.').notEmpty();
+    if (with_date === '1') {
       req
-        .checkBody("begin_date", "La fecha de inicio es necesaria.")
+        .checkBody('begin_date', 'La fecha de inicio es necesaria.')
         .notEmpty();
       req
-        .checkBody("end_date", "La fecha de culminación es necesaria.")
+        .checkBody('end_date', 'La fecha de culminación es necesaria.')
         .notEmpty();
     }
     req
       .checkBody(
-        "category_id",
-        "La categoria a la que pertenece el curso es necesaria."
+        'category_id',
+        'La categoria a la que pertenece el curso es necesaria.'
       )
       .notEmpty();
     req
-      .checkBody("modality_id", "La modalidad del curso es necesaria.")
+      .checkBody('modality_id', 'La modalidad del curso es necesaria.')
       .notEmpty();
     req
-      .checkBody("user_id", "El usuario quien sube el curso es necesario.")
+      .checkBody('user_id', 'El usuario quien sube el curso es necesario.')
       .notEmpty();
-    req.checkBody("link_media", "El link del curso es requerido.").notEmpty();
-    req.checkBody("duration", "La duración del curso es requerida.").notEmpty();
+    req.checkBody('link_media', 'El link del curso es requerido.').notEmpty();
+    req.checkBody('duration', 'La duración del curso es requerida.').notEmpty();
     let errors = req.validationErrors();
 
     if (errors)
@@ -200,7 +204,7 @@ class CoursesController {
     var date_begin;
     var date_end;
 
-    if (with_date === "1") {
+    if (with_date === '1') {
       date_begin = addDayWithoutFormat(begin_date);
       date_end = addDayWithoutFormat(end_date);
 
@@ -208,14 +212,14 @@ class CoursesController {
         return res.json({
           status: 500,
           message:
-            "Disculpe, la fecha de inicio debe ser mayor o igual a la actual.",
+            'Disculpe, la fecha de inicio debe ser mayor o igual a la actual.',
         });
 
       if (date_begin > date_end)
         return res.json({
           status: 500,
           message:
-            "Disculpe, la fecha de finalización debe ser mayor a la de inicio.",
+            'Disculpe, la fecha de finalización debe ser mayor a la de inicio.',
         });
     } else {
       date_begin = null;
@@ -226,38 +230,41 @@ class CoursesController {
       return res.json({
         status: 500,
         message:
-          "Ingrese un link válido, recuerde que este será el link de accesso al curso.",
+          'Ingrese un link válido, recuerde que este será el link de accesso al curso.',
       });
 
     if (!req.files.image)
       return res.json({
         status: 500,
-        message: "Suba una imagen promocional.",
+        message: 'Suba una imagen promocional.',
       });
 
-    let new_image_name = "";
-    let new_pdf_name = "";
+    let new_image_name = '';
+    let new_pdf_name = '';
 
     // Upload promotional image
 
     let preview_image = req.files.image;
-    let allowed_extensions = ["jpg", "jpeg", "png", "gif"];
-    let short_name = preview_image.name.split(".");
+    let allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    let short_name = preview_image.name.split('.');
     let extension = short_name[short_name.length - 1];
 
     if (allowed_extensions.indexOf(extension) < 0) {
       return res.json({
         status: 500,
         message:
-          "Formato de archivo no válido, las extensiones permitidas son " +
-          allowed_extensions.join(", "),
+          'Formato de archivo no válido, las extensiones permitidas son ' +
+          allowed_extensions.join(', '),
       });
     }
 
     new_image_name = `${new Date().getMilliseconds()}.${extension}`;
 
     preview_image.mv(
-      "public/uploads/courses/images/" + new_image_name,
+      path.resolve(
+        __dirname,
+        '../../public/uploads/courses/images/' + new_image_name
+      ),
       (err) => {
         if (err)
           return res.status(500).json({
@@ -270,27 +277,33 @@ class CoursesController {
     // Upload pdf description if it exists
     if (req.files.document_description) {
       let pdf_name = req.files.document_description;
-      let pdf_allowed_extensions = ["pdf"];
-      let pdf_short_name = pdf_name.name.split(".");
+      let pdf_allowed_extensions = ['pdf'];
+      let pdf_short_name = pdf_name.name.split('.');
       let pdf_extension = pdf_short_name[pdf_short_name.length - 1];
 
       if (pdf_allowed_extensions.indexOf(pdf_extension) < 0) {
         return res.json({
           status: 500,
           message:
-            "Formato de archivo no válido, la extensión del archivo debe ser pdf",
+            'Formato de archivo no válido, la extensión del archivo debe ser pdf',
         });
       }
 
       new_pdf_name = `${new Date().getMilliseconds()}.${pdf_extension}`;
 
-      pdf_name.mv("public/uploads/courses/pdfs/" + new_pdf_name, (err) => {
-        if (err)
-          return res.status(200).json({
-            status: 500,
-            err,
-          });
-      });
+      pdf_name.mv(
+        path.resolve(
+          __dirname,
+          '../../public/uploads/courses/pdfs/' + new_pdf_name
+        ),
+        (err) => {
+          if (err)
+            return res.status(200).json({
+              status: 500,
+              err,
+            });
+        }
+      );
     }
 
     let insert = `INSERT INTO course(`;
@@ -309,27 +322,27 @@ class CoursesController {
         });
 
       let SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex, u2p.description as provider_description,";
+        'u2p.facebook as provider_facebook, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex, u2p.description as provider_description,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id and m.status = 1 and c.status = 1 AND course.id = ? ";
+        'AND course.category_id = c.id AND course.modality_id = m.id and m.status = 1 and c.status = 1 AND course.id = ? ';
 
       this.connection.query(SELECT, result.insertId, (err, resultGet) => {
         if (err)
@@ -340,7 +353,7 @@ class CoursesController {
 
         return res.json({
           status: 200,
-          message: "Curso cargado con exito",
+          message: 'Curso cargado con exito',
           course: CoursesTransformer.transform(resultGet[0]),
         });
       });
@@ -358,7 +371,7 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 402,
-        message: "El curso ya no se encuentra disponible.",
+        message: 'El curso ya no se encuentra disponible.',
       });
 
     course[0].document_description = course[0].document_description || null;
@@ -383,38 +396,38 @@ class CoursesController {
       offer_price,
     } = req.body;
 
-    req.checkBody("name", "El titulo es requerido.").notEmpty();
+    req.checkBody('name', 'El titulo es requerido.').notEmpty();
     req
-      .checkBody("provider", "El nombre del profesor es necesario.")
+      .checkBody('provider', 'El nombre del profesor es necesario.')
       .notEmpty();
-    if (is_in_offer === "1") {
+    if (is_in_offer === '1') {
       req
-        .checkBody("offer_price", "El precio de oferta del curso es necesario.")
+        .checkBody('offer_price', 'El precio de oferta del curso es necesario.')
         .notEmpty();
     }
-    req.checkBody("price", "El precio del curso es necesario.").notEmpty();
-    if (with_date === "1") {
+    req.checkBody('price', 'El precio del curso es necesario.').notEmpty();
+    if (with_date === '1') {
       req
-        .checkBody("begin_date", "La fecha de inicio es necesaria.")
+        .checkBody('begin_date', 'La fecha de inicio es necesaria.')
         .notEmpty();
       req
-        .checkBody("end_date", "La fecha de culminación es necesaria.")
+        .checkBody('end_date', 'La fecha de culminación es necesaria.')
         .notEmpty();
     }
     req
       .checkBody(
-        "category_id",
-        "La categoria a la que pertenece el curso es necesaria."
+        'category_id',
+        'La categoria a la que pertenece el curso es necesaria.'
       )
       .notEmpty();
     req
-      .checkBody("modality_id", "La modalidad del curso es necesaria.")
+      .checkBody('modality_id', 'La modalidad del curso es necesaria.')
       .notEmpty();
     req
-      .checkBody("user_id", "El usuario quien sube el curso es necesario.")
+      .checkBody('user_id', 'El usuario quien sube el curso es necesario.')
       .notEmpty();
-    req.checkBody("link_media", "El link del curso es requerido.").notEmpty();
-    req.checkBody("duration", "La duración del curso es requerida.").notEmpty();
+    req.checkBody('link_media', 'El link del curso es requerido.').notEmpty();
+    req.checkBody('duration', 'La duración del curso es requerida.').notEmpty();
     let errors = req.validationErrors();
 
     if (errors)
@@ -423,7 +436,7 @@ class CoursesController {
         errors,
       });
 
-    if (with_date === "1") {
+    if (with_date === '1') {
       req.body.begin_date = addDayWithoutFormat(begin_date);
       req.body.end_date = addDayWithoutFormat(end_date);
 
@@ -431,14 +444,14 @@ class CoursesController {
         return res.json({
           status: 500,
           message:
-            "Disculpe, la fecha de inicio debe ser mayor o igual a la actual.",
+            'Disculpe, la fecha de inicio debe ser mayor o igual a la actual.',
         });
 
       if (req.body.begin_date > req.body.end_date)
         return res.json({
           status: 500,
           message:
-            "Disculpe, la fecha de finalización debe ser mayor a la de inicio.",
+            'Disculpe, la fecha de finalización debe ser mayor a la de inicio.',
         });
     } else {
       req.body.begin_date = null;
@@ -449,45 +462,50 @@ class CoursesController {
       return res.json({
         status: 500,
         message:
-          "Ingrese un link válido, recuerde que este será el link de accesso al curso.",
+          'Ingrese un link válido, recuerde que este será el link de accesso al curso.',
       });
 
-    let new_pdf_name = "";
+    let new_pdf_name = '';
 
     // Upload pdf description if it exists
     if (req.files && req.files.document_description) {
       let pdf_name = req.files.document_description;
-      let pdf_allowed_extensions = ["pdf"];
-      let pdf_short_name = pdf_name.name.split(".");
+      let pdf_allowed_extensions = ['pdf'];
+      let pdf_short_name = pdf_name.name.split('.');
       let pdf_extension = pdf_short_name[pdf_short_name.length - 1];
 
       if (pdf_allowed_extensions.indexOf(pdf_extension) < 0) {
         return res.json({
           status: 500,
           message:
-            "Formato de archivo no válido, la extensión del archivo debe ser pdf",
+            'Formato de archivo no válido, la extensión del archivo debe ser pdf',
         });
       }
 
-      console.log(course[0]);
       let pathImage = path.resolve(
         __dirname,
         `../../public/uploads/courses/pdfs/${course[0].document_description}`
       );
-      console.log(pathImage);
       if (fs.existsSync(pathImage)) {
         fs.unlinkSync(pathImage);
       }
 
       new_pdf_name = `${id}-${new Date().getMilliseconds()}.${pdf_extension}`;
 
-      pdf_name.mv("public/uploads/courses/pdfs/" + new_pdf_name, (err) => {
-        if (err)
-          return res.status(200).json({
-            status: 500,
-            err,
-          });
-      });
+      pdf_name.mv(
+        path.resolve(
+          __dirname,
+          '../../public/uploads/courses/pdfs/' + new_pdf_name
+        ),
+        (err) => {
+          if (err)
+            return res.status(200).json({
+              status: 500,
+              err,
+            });
+        }
+      );
+
       req.body.document_description = new_pdf_name;
     }
 
@@ -501,27 +519,27 @@ class CoursesController {
         });
 
       let SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex, u2p.description as provider_description,";
+        'u2p.facebook as provider_facebook, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex, u2p.description as provider_description,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id and m.status = 1 and c.status = 1 AND course.id = ? ";
+        'AND course.category_id = c.id AND course.modality_id = m.id and m.status = 1 and c.status = 1 AND course.id = ? ';
 
       this.connection.query(SELECT, id, (err, resultGet) => {
         if (err)
@@ -532,7 +550,7 @@ class CoursesController {
 
         return res.json({
           status: 200,
-          message: "Curso modificado con exito",
+          message: 'Curso modificado con exito',
           course: CoursesTransformer.transform(resultGet[0]),
         });
       });
@@ -542,209 +560,209 @@ class CoursesController {
   async filter(req, res) {
     const { category_id, modality_id, name } = req.query;
 
-    var SELECT = "";
+    var SELECT = '';
 
     if (!category_id && !modality_id && !name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = 1 ";
+        'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = 1 ';
     }
 
     if (category_id && !modality_id && !name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND c.id = " +
+        'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND c.id = ' +
         category_id +
-        " AND course.status = 1";
+        ' AND course.status = 1';
     }
 
     if (!category_id && modality_id && !name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = " +
+        'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = ' +
         modality_id +
-        " AND course.status = 1";
+        ' AND course.status = 1';
     }
 
     if (!category_id && !modality_id && name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT += `AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = 1 AND course.name LIKE '%${name}%'`;
     }
 
     if (category_id && !modality_id && name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT += `AND course.category_id = c.id AND c.id = ${category_id} AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = 1 AND course.name LIKE '%${name}%'`;
     }
 
     if (!category_id && modality_id && name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT += `AND course.category_id = c.id AND course.modality_id = m.id AND course.modality_id = ${modality_id} AND m.status = 1 AND c.status = 1 AND course.status = 1 AND course.name LIKE '%${name}%'`;
     }
 
     if (category_id && modality_id && !name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = " +
+        'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = ' +
         modality_id +
-        " AND c.id = " +
+        ' AND c.id = ' +
         category_id +
-        " AND course.status = 1";
+        ' AND course.status = 1';
     }
 
     if (category_id && modality_id && name) {
       SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT += `AND course.category_id = c.id AND course.category_id = ${category_id} AND course.modality_id = m.id AND course.modality_id = ${modality_id} AND m.status = 1 AND c.status = 1 AND course.status = 1 AND course.name LIKE '%${name}%'`;
     }
 
@@ -759,7 +777,7 @@ class CoursesController {
 
       return res.json({
         status: 200,
-        message: "Cursos cargados con exito",
+        message: 'Cursos cargados con exito',
         courses: CoursesTransformer.transform(result),
       });
     });
@@ -767,27 +785,27 @@ class CoursesController {
 
   async indexActives(req, res) {
     let SELECT =
-      "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+      'SELECT course.id, course.name, course.duration, course.description, course.provider,';
     SELECT +=
-      "course.price, course.document_description, course.image, course.link_media, course.status,";
+      'course.price, course.document_description, course.image, course.link_media, course.status,';
     SELECT +=
-      "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-    SELECT += "c.name as category_name, c.status as category_status,";
-    SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+      'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+    SELECT += 'c.name as category_name, c.status as category_status,';
+    SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
     SELECT +=
-      "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+      'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
     SELECT +=
-      "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+      'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
     SELECT +=
-      "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+      'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
     SELECT +=
-      "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+      'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
     SELECT +=
-      "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+      'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
     SELECT +=
-      "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+      'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
     SELECT +=
-      "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = ?";
+      'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = ?';
 
     this.connection.query(SELECT, 1, (err, result) => {
       if (err)
@@ -798,7 +816,7 @@ class CoursesController {
 
       return res.json({
         status: 200,
-        message: "Cursos cargados con exito",
+        message: 'Cursos cargados con exito',
         courses: CoursesTransformer.transform(result),
       });
     });
@@ -806,26 +824,26 @@ class CoursesController {
 
   async index(req, res) {
     let SELECT =
-      "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+      'SELECT course.id, course.name, course.duration, course.description, course.provider,';
     SELECT +=
-      "course.price, course.document_description, course.image, course.link_media, course.status,";
+      'course.price, course.document_description, course.image, course.link_media, course.status,';
     SELECT +=
-      "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-    SELECT += "c.name as category_name, c.status as category_status,";
-    SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+      'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+    SELECT += 'c.name as category_name, c.status as category_status,';
+    SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
     SELECT +=
-      "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+      'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
     SELECT +=
-      "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+      'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
     SELECT +=
-      "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+      'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
     SELECT +=
-      "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+      'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
     SELECT +=
-      "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+      'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
     SELECT +=
-      "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
-    SELECT += "AND course.category_id = c.id AND course.modality_id = m.id";
+      'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
+    SELECT += 'AND course.category_id = c.id AND course.modality_id = m.id';
 
     this.connection.query(SELECT, (err, result) => {
       if (err)
@@ -836,7 +854,7 @@ class CoursesController {
 
       return res.json({
         status: 200,
-        message: "Cursos cargados con exito",
+        message: 'Cursos cargados con exito',
         courses: CoursesTransformer.transform(result),
       });
     });
@@ -846,27 +864,27 @@ class CoursesController {
     const { id } = req.params;
 
     let SELECT =
-      "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+      'SELECT course.id, course.name, course.duration, course.description, course.provider,';
     SELECT +=
-      "course.price, course.document_description, course.image, course.link_media, course.status,";
+      'course.price, course.document_description, course.image, course.link_media, course.status,';
     SELECT +=
-      "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-    SELECT += "c.name as category_name, c.status as category_status,";
-    SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+      'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+    SELECT += 'c.name as category_name, c.status as category_status,';
+    SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
     SELECT +=
-      "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+      'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
     SELECT +=
-      "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+      'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
     SELECT +=
-      "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+      'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
     SELECT +=
-      "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+      'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
     SELECT +=
-      "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+      'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
     SELECT +=
-      "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+      'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
     SELECT +=
-      "AND course.category_id = c.id AND course.modality_id = m.id and course.status = 1 AND course.id = ? ";
+      'AND course.category_id = c.id AND course.modality_id = m.id and course.status = 1 AND course.id = ? ';
 
     this.connection.query(SELECT, id, (err, result) => {
       if (err)
@@ -878,12 +896,12 @@ class CoursesController {
       if (result.length === 0)
         return res.json({
           status: 404,
-          message: "El curso ya no está diponible o no existe.",
+          message: 'El curso ya no está diponible o no existe.',
         });
 
       return res.json({
         status: 200,
-        message: "Curso cargado con exito",
+        message: 'Curso cargado con exito',
         course: CoursesTransformer.transform(result[0]),
       });
     });
@@ -893,7 +911,7 @@ class CoursesController {
     const query = util.promisify(this.connection.query).bind(this.connection);
 
     let categories = await query(
-      "SELECT id, name from category where status = 1"
+      'SELECT id, name from category where status = 1'
     );
 
     console.log(categories);
@@ -901,7 +919,7 @@ class CoursesController {
     if (categories.length === 0)
       return res.json({
         status: 200,
-        message: "No hay categorias registradas.",
+        message: 'No hay categorias registradas.',
       });
 
     var category;
@@ -914,29 +932,29 @@ class CoursesController {
       category = categories[i];
 
       let SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND c.id = " +
+        'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND c.id = ' +
         category.id +
-        " AND course.status = 1";
+        ' AND course.status = 1';
 
       courses = await query(SELECT);
 
@@ -951,7 +969,7 @@ class CoursesController {
 
     res.json({
       status: 200,
-      message: "Cursos por categoría cargadas con éxito.",
+      message: 'Cursos por categoría cargadas con éxito.',
       courses: coursesByCategories,
       sections: coursesByCategories.length,
     });
@@ -963,49 +981,49 @@ class CoursesController {
     const category_id = parseInt(req.params.id, 10);
 
     let category = await query(
-      "SELECT id, name from category where status = 1 AND id = ? ",
+      'SELECT id, name from category where status = 1 AND id = ? ',
       category_id
     );
 
     if (category.length === 0)
       return res.json({
         status: 200,
-        message: "La categoría no existe.",
+        message: 'La categoría no existe.',
       });
 
     var courses;
 
     let SELECT =
-      "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+      'SELECT course.id, course.name, course.duration, course.description, course.provider,';
     SELECT +=
-      "course.price, course.document_description, course.image, course.link_media, course.status,";
+      'course.price, course.document_description, course.image, course.link_media, course.status,';
     SELECT +=
-      "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-    SELECT += "c.name as category_name, c.status as category_status,";
-    SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+      'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+    SELECT += 'c.name as category_name, c.status as category_status,';
+    SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
     SELECT +=
-      "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+      'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
     SELECT +=
-      "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+      'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
     SELECT +=
-      "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+      'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
     SELECT +=
-      "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+      'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
     SELECT +=
-      "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+      'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
     SELECT +=
-      "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+      'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
     SELECT +=
-      "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND c.id = " +
+      'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND c.id = ' +
       category[0].id +
-      " AND course.status = 1";
+      ' AND course.status = 1';
 
     courses = await query(SELECT);
 
     res.json({
       status: 200,
       name: category[0].name,
-      message: "Cursos por categoría cargados con éxito.",
+      message: 'Cursos por categoría cargados con éxito.',
       courses: CoursesTransformer.transform(courses),
     });
   }
@@ -1016,49 +1034,49 @@ class CoursesController {
     const modality_id = parseInt(req.params.id, 10);
 
     let modality = await query(
-      "SELECT id, name from modality where status = 1 AND id = ? ",
+      'SELECT id, name from modality where status = 1 AND id = ? ',
       modality_id
     );
 
     if (modality.length === 0)
       return res.json({
         status: 200,
-        message: "La modalidad no existe.",
+        message: 'La modalidad no existe.',
       });
 
     var courses;
 
     let SELECT =
-      "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+      'SELECT course.id, course.name, course.duration, course.description, course.provider,';
     SELECT +=
-      "course.price, course.document_description, course.image, course.link_media, course.status,";
+      'course.price, course.document_description, course.image, course.link_media, course.status,';
     SELECT +=
-      "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-    SELECT += "c.name as category_name, c.status as category_status,";
-    SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+      'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+    SELECT += 'c.name as category_name, c.status as category_status,';
+    SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
     SELECT +=
-      "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+      'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
     SELECT +=
-      "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+      'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
     SELECT +=
-      "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+      'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
     SELECT +=
-      "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+      'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
     SELECT +=
-      "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+      'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
     SELECT +=
-      "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+      'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
     SELECT +=
-      "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = " +
+      'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = ' +
       modality[0].id +
-      " AND course.status = 1";
+      ' AND course.status = 1';
 
     courses = await query(SELECT);
 
     res.json({
       status: 200,
       name: modality[0].name,
-      message: "Cursos por modalidad cargados con éxito.",
+      message: 'Cursos por modalidad cargados con éxito.',
       courses: CoursesTransformer.transform(courses),
     });
   }
@@ -1070,60 +1088,60 @@ class CoursesController {
     const modality_id = parseInt(req.params.modality_id, 10);
 
     let modality = await query(
-      "SELECT id, name from modality where status = 1 AND id = ? ",
+      'SELECT id, name from modality where status = 1 AND id = ? ',
       modality_id
     );
     let category = await query(
-      "SELECT id, name from category where status = 1 AND id = ? ",
+      'SELECT id, name from category where status = 1 AND id = ? ',
       category_id
     );
 
     if (modality.length === 0)
       return res.json({
         status: 200,
-        message: "La modalidad no existe.",
+        message: 'La modalidad no existe.',
       });
 
     if (category.length === 0)
       return res.json({
         status: 200,
-        message: "La categoría no existe.",
+        message: 'La categoría no existe.',
       });
 
     var courses;
 
     let SELECT =
-      "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+      'SELECT course.id, course.name, course.duration, course.description, course.provider,';
     SELECT +=
-      "course.price, course.document_description, course.image, course.link_media, course.status,";
+      'course.price, course.document_description, course.image, course.link_media, course.status,';
     SELECT +=
-      "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-    SELECT += "c.name as category_name, c.status as category_status,";
-    SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+      'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+    SELECT += 'c.name as category_name, c.status as category_status,';
+    SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
     SELECT +=
-      "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+      'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
     SELECT +=
-      "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+      'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
     SELECT +=
-      "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+      'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
     SELECT +=
-      "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+      'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
     SELECT +=
-      "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+      'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
     SELECT +=
-      "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+      'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
     SELECT +=
-      "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = " +
+      'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND m.id = ' +
       modality[0].id +
-      " AND c.id = " +
+      ' AND c.id = ' +
       category[0].id +
-      " AND course.status = 1";
+      ' AND course.status = 1';
 
     courses = await query(SELECT);
 
     res.json({
       status: 200,
-      message: "Cursos por modalidad y categorias cargados con éxito.",
+      message: 'Cursos por modalidad y categorias cargados con éxito.',
       modality_name: modality[0].name,
       category_name: category[0].name,
       courses: CoursesTransformer.transform(courses),
@@ -1139,7 +1157,7 @@ class CoursesController {
     if (user.length === 0)
       return res.json({
         status: 404,
-        message: "El usuario no existe.",
+        message: 'El usuario no existe.',
       });
 
     let course_user = await query(
@@ -1149,7 +1167,7 @@ class CoursesController {
     if (course_user.length === 0)
       return res.json({
         status: 200,
-        message: "El usuario no se ha inscrito en ningun curso",
+        message: 'El usuario no se ha inscrito en ningun curso',
         courses: [],
       });
 
@@ -1157,27 +1175,27 @@ class CoursesController {
 
     for (var i = 0; i < course_user.length; i++) {
       let SELECT =
-        "SELECT course.id, course.name, course.duration, course.description, course.provider,";
+        'SELECT course.id, course.name, course.duration, course.description, course.provider,';
       SELECT +=
-        "course.price, course.document_description, course.image, course.link_media, course.status,";
+        'course.price, course.document_description, course.image, course.link_media, course.status,';
       SELECT +=
-        "course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,";
-      SELECT += "c.name as category_name, c.status as category_status,";
-      SELECT += "u.id as user_id, u.email as user_email, up.name as user_name,";
+        'course.begin_date, course.end_date, course.is_important, course.is_in_offer, course.offer_price, course.with_date, c.id as category_id,';
+      SELECT += 'c.name as category_name, c.status as category_status,';
+      SELECT += 'u.id as user_id, u.email as user_email, up.name as user_name,';
       SELECT +=
-        "u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,";
+        'u2.id as provider_id, u2.email as provider_email, u2p.name as provider_name,';
       SELECT +=
-        "u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,";
+        'u2p.last_name as provider_lastname, u2p.phone as provider_phone, u2p.picture_url as provider_image,';
       SELECT +=
-        "u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,";
+        'u2p.facebook as provider_facebook, u2p.description as provider_description, u2p.twitter as provider_twitter, u2p.instagram as provider_instagram, u2p.sex as provider_sex,';
       SELECT +=
-        "m.id as modality_id, m.name as modality_name, m.status as modality_status ";
+        'm.id as modality_id, m.name as modality_name, m.status as modality_status ';
       SELECT +=
-        "FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ";
+        'FROM course, users as u, users as u2, user_profile as up, user_profile as u2p, category as c, modality as m ';
       SELECT +=
-        "WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ";
+        'WHERE course.user_id = u.id AND up.user_id = u.id AND course.provider = u2.id AND u2p.user_id = u2.id ';
       SELECT +=
-        "AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = 1 AND course.id = ? ";
+        'AND course.category_id = c.id AND course.modality_id = m.id AND m.status = 1 AND c.status = 1 AND course.status = 1 AND course.id = ? ';
 
       let course = await query(SELECT, course_user[i].course_id);
 
@@ -1192,7 +1210,7 @@ class CoursesController {
 
     return res.json({
       status: 200,
-      message: "Cursos del usuario cargados con éxito.",
+      message: 'Cursos del usuario cargados con éxito.',
       courses: courseByUsers,
     });
   }
@@ -1208,7 +1226,7 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 402,
-        message: "El curso ya no se encuentra disponible.",
+        message: 'El curso ya no se encuentra disponible.',
       });
 
     course = await query(
@@ -1217,7 +1235,7 @@ class CoursesController {
 
     return res.json({
       status: 200,
-      message: "El curso se ha marcado como destacado.",
+      message: 'El curso se ha marcado como destacado.',
     });
   }
 
@@ -1232,7 +1250,7 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 402,
-        message: "El curso ya no se encuentra disponible.",
+        message: 'El curso ya no se encuentra disponible.',
       });
 
     course = await query(
@@ -1241,7 +1259,7 @@ class CoursesController {
 
     return res.json({
       status: 200,
-      message: "El curso se ha desmarcado como destacado.",
+      message: 'El curso se ha desmarcado como destacado.',
     });
   }
 
@@ -1258,14 +1276,14 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 402,
-        message: "El curso ya no se encuentra disponible.",
+        message: 'El curso ya no se encuentra disponible.',
       });
 
     course = await query(`UPDATE course SET status=2 WHERE id=${course[0].id}`);
 
     return res.json({
       status: 200,
-      message: "El curso se ha eliminado con éxito.",
+      message: 'El curso se ha eliminado con éxito.',
     });
   }
 
@@ -1282,14 +1300,14 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 402,
-        message: "El curso ya se encuentra disponible.",
+        message: 'El curso ya se encuentra disponible.',
       });
 
     course = await query(`UPDATE course SET status=1 WHERE id=${course[0].id}`);
 
     return res.json({
       status: 200,
-      message: "El curso se ha reactivado con éxito.",
+      message: 'El curso se ha reactivado con éxito.',
     });
   }
 
@@ -1299,25 +1317,25 @@ class CoursesController {
     if (!req.files)
       return res.status(400).json({
         status: 400,
-        message: "No se ha seleccionado ningún archivo",
+        message: 'No se ha seleccionado ningún archivo',
       });
 
     let image = req.files.image;
-    let allowed_extensions = ["jpg", "jpeg", "png", "gif"];
-    let short_name = image.name.split(".");
+    let allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    let short_name = image.name.split('.');
     let extension = short_name[short_name.length - 1];
 
     if (allowed_extensions.indexOf(extension) < 0) {
       return res.json({
         status: 500,
         message:
-          "Formato de archivo no válido, las extensiones permitidas son " +
-          allowed_extensions.join(", "),
+          'Formato de archivo no válido, las extensiones permitidas son ' +
+          allowed_extensions.join(', '),
       });
     }
 
     this.connection.query(
-      "SELECT image FROM course WHERE id = ?",
+      'SELECT image FROM course WHERE id = ?',
       id,
       (err, resultImage) => {
         if (err)
@@ -1339,37 +1357,43 @@ class CoursesController {
 
     let new_image_name = `${id}-${new Date().getMilliseconds()}.${extension}`;
 
-    image.mv("public/uploads/courses/images/" + new_image_name, (err) => {
-      if (err)
-        return res.status(500).json({
-          status: 500,
-          err,
-        });
-
-      this.connection.query(
-        `UPDATE course SET image = '${new_image_name}' where id = ${id} `,
-        (errsql, result) => {
-          if (errsql)
-            return res.status(500).json({
-              status: 500,
-              err,
-            });
-
-          return res.status(200).json({
-            status: 200,
-            message: "Se ha subido con exito la imágen del curso.",
-            image: new_image_name,
+    image.mv(
+      path.resolve(
+        __dirname,
+        '../../public/uploads/courses/images/' + new_image_name
+      ),
+      (err) => {
+        if (err)
+          return res.status(500).json({
+            status: 500,
+            err,
           });
-        }
-      );
-    });
+
+        this.connection.query(
+          `UPDATE course SET image = '${new_image_name}' where id = ${id} `,
+          (errsql, result) => {
+            if (errsql)
+              return res.status(500).json({
+                status: 500,
+                err,
+              });
+
+            return res.status(200).json({
+              status: 200,
+              message: 'Se ha subido con exito la imágen del curso.',
+              image: new_image_name,
+            });
+          }
+        );
+      }
+    );
   }
 
   async sendAdminBuyRequest(req, res, next) {
     const { id } = req.params;
     var { email, comment } = req.body;
 
-    req.checkBody("email", "El correo es necesario.").notEmpty();
+    req.checkBody('email', 'El correo es necesario.').notEmpty();
     let errors = req.validationErrors();
 
     if (errors)
@@ -1387,7 +1411,7 @@ class CoursesController {
     if (!user[0])
       return res.json({
         status: 500,
-        message: "El usuario no existe.",
+        message: 'El usuario no existe.',
       });
 
     const course = await query(`SELECT id, name FROM course WHERE id=${id}`);
@@ -1395,36 +1419,36 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 500,
-        message: "El curso no existe.",
+        message: 'El curso no existe.',
       });
 
     //config mail
     var transporter = nodemailer.createTransport({
-      host: "smtp.mandrillapp.com",
+      host: 'smtp.mandrillapp.com',
       secure: false,
       port: 587,
       auth: {
-        type: "login",
-        user: "cursos@colaboral.com",
-        pass: "Cursos2020",
+        type: 'login',
+        user: 'cursos@colaboral.com',
+        pass: 'Cursos2020',
       },
       logger: true, // log to console
     });
 
     transporter.use(
-      "compile",
+      'compile',
       hbs({
         viewEngine: {
-          extName: ".hbs",
+          extName: '.hbs',
           partialsDir: path.resolve(__dirname, `../templates/`),
           layoutsDir: path.resolve(__dirname, `../templates/`),
-          defaultLayout: "BuyAdminCourseRequest",
+          defaultLayout: 'BuyAdminCourseRequest',
         },
         viewPath: path.resolve(__dirname, `../templates/`),
       })
     );
 
-    comment = comment || "";
+    comment = comment || '';
 
     let token = jwt.sign(
       {
@@ -1441,7 +1465,7 @@ class CoursesController {
       if (err) {
         return res.json({
           status: 500,
-          message: "Token no válido",
+          message: 'Token no válido',
         });
       }
 
@@ -1451,8 +1475,8 @@ class CoursesController {
     const course_link = `${process.env.REACT_PORT}/courses/unblock?unblock_token=${token}`;
 
     var mailOptionsAdmin = {
-      to: "cursos@colaboral.com",
-      from: "cursos@colaboral.com",
+      to: 'cursos@colaboral.com',
+      from: 'cursos@colaboral.com',
       subject: `Solicitud de compra del curso ${course[0].name} usuario ${email}.`,
       context: {
         course_name: course[0].name,
@@ -1461,24 +1485,24 @@ class CoursesController {
       },
       attachments: [
         {
-          filename: "image1",
+          filename: 'image1',
           path: path.resolve(
             __dirname,
             `../templates/images/colaboral-color.png`
           ),
-          cid: "image1@image",
+          cid: 'image1@image',
         },
       ],
-      template: "BuyAdminCourseRequest",
+      template: 'BuyAdminCourseRequest',
     };
 
-    console.log("sending...");
+    console.log('sending...');
     transporter.sendMail(mailOptionsAdmin, async function (error) {
       if (error) {
         console.log(error);
-        return res.json({ status: 500, message: "No se pudo enviar el email" });
+        return res.json({ status: 500, message: 'No se pudo enviar el email' });
       } else {
-        console.log(email, "success");
+        console.log(email, 'success');
       }
     });
 
@@ -1489,12 +1513,12 @@ class CoursesController {
     const { id } = req.params;
     var { email, comment } = req.body;
 
-    const bank_account = "0108 0050 1121 12 1111 0000";
-    const bank_account_owner = "Colaboral";
-    const pay_email = "cursos@colaboral.com";
-    const pay_phone = "+56123456789";
+    const bank_account = '0108 0050 1121 12 1111 0000';
+    const bank_account_owner = 'Colaboral';
+    const pay_email = 'cursos@colaboral.com';
+    const pay_phone = '+56123456789';
 
-    req.checkBody("email", "El correo es necesario.").notEmpty();
+    req.checkBody('email', 'El correo es necesario.').notEmpty();
     let errors = req.validationErrors();
 
     if (errors)
@@ -1512,7 +1536,7 @@ class CoursesController {
     if (!user[0])
       return res.json({
         status: 500,
-        message: "El usuario no existe.",
+        message: 'El usuario no existe.',
       });
 
     const course = await query(
@@ -1522,36 +1546,36 @@ class CoursesController {
     if (!course[0])
       return res.json({
         status: 500,
-        message: "El curso no existe.",
+        message: 'El curso no existe.',
       });
 
     //config mail
     var transporter = nodemailer.createTransport({
-      host: "smtp.mandrillapp.com",
+      host: 'smtp.mandrillapp.com',
       secure: false,
       port: 587,
       auth: {
-        type: "login",
-        user: "cursos@colaboral.com",
-        pass: "Cursos2020",
+        type: 'login',
+        user: 'cursos@colaboral.com',
+        pass: 'Cursos2020',
       },
       logger: true, // log to console
     });
 
     transporter.use(
-      "compile",
+      'compile',
       hbs({
         viewEngine: {
-          extName: ".hbs",
+          extName: '.hbs',
           partialsDir: path.resolve(__dirname, `../templates/`),
           layoutsDir: path.resolve(__dirname, `../templates/`),
-          defaultLayout: "BuyUserCourseRequest",
+          defaultLayout: 'BuyUserCourseRequest',
         },
         viewPath: path.resolve(__dirname, `../templates/`),
       })
     );
 
-    comment = comment || "";
+    comment = comment || '';
 
     const price =
       parseInt(course[0].is_in_offer, 10) === 1
@@ -1560,7 +1584,7 @@ class CoursesController {
 
     var mailOptionsUser = {
       to: email,
-      from: "me", //change this
+      from: 'me', //change this
       subject: `Solicitud de compra del curso ${course[0].name}.`,
       context: {
         email,
@@ -1573,23 +1597,23 @@ class CoursesController {
       },
       attachments: [
         {
-          filename: "image1",
+          filename: 'image1',
           path: path.resolve(
             __dirname,
             `../templates/images/colaboral-color.png`
           ),
-          cid: "image1@image",
+          cid: 'image1@image',
         },
       ],
-      template: "BuyUserCourseRequest",
+      template: 'BuyUserCourseRequest',
     };
 
     transporter.sendMail(mailOptionsUser, async function (error) {
       if (error) {
         console.log(error);
-        return res.json({ status: 500, message: "No se pudo enviar el email" });
+        return res.json({ status: 500, message: 'No se pudo enviar el email' });
       } else {
-        console.log(email, "success");
+        console.log(email, 'success');
 
         await query(
           `INSERT INTO course_user(user_id, course_id, comment) VALUES(${user[0].id}, ${course[0].id}, '${comment}')`,
@@ -1603,7 +1627,7 @@ class CoursesController {
 
             return res.json({
               status: 200,
-              message: "Se ha enviado tu solicitud exitosamente.",
+              message: 'Se ha enviado tu solicitud exitosamente.',
             });
           }
         );
@@ -1621,7 +1645,7 @@ class CoursesController {
       if (err) {
         return res.json({
           status: 500,
-          message: "El token expiró o ya no es valido.",
+          message: 'El token expiró o ya no es valido.',
         });
       }
 
@@ -1636,7 +1660,7 @@ class CoursesController {
         return res.json({
           status: 500,
           message:
-            "No ha hecho la solicitud para este curso o ya se ha vencido.",
+            'No ha hecho la solicitud para este curso o ya se ha vencido.',
         });
 
       await query(
