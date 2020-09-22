@@ -64,19 +64,23 @@ class CoursesController {
       `SELECT COUNT(*) as orderCount FROM course_user WHERE user_id=${req.usuario.id}`
     );
 
-    console.log(result);
-
     if (result[0].orderCount === 0) result[0].orderCount = 1;
 
     return result[0].orderCount;
   }
 
+  getRandomInt = function(min, max) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
+  }
+
   async startWebPayTransaction(req, res) {
+    
     let Webpay = webPay();
     let url = process.env.NODE_URL || 'http://localhost:3000';
     let amount = 1500;
-    let orderCount = await this.getUserOrderCount(req);
-
+    let orderCount = await this.getUserOrderCount(req) + this.getRandomInt(10000, 99999);
     Webpay.initTransaction(
       amount,
       'Orden' + orderCount.toString(),
@@ -85,9 +89,9 @@ class CoursesController {
       url + '/courses/webpay-normal/finish'
     ).then((data) => {
       transactions[data.token] = { amount: amount };
-      console.log(transactions);
       res.json({ url: data.url, token: data.token, inputName: 'TBK_TOKEN' });
     });
+    
   }
 
   async responseWebPay(req, res) {
@@ -98,7 +102,6 @@ class CoursesController {
     Webpay.getTransactionResult(token)
       .then((response) => {
         transactions[token] = response;
-        console.log(response);
         res.render('redirect-transbank', {
           url: response.urlRedirection,
           token,
@@ -106,7 +109,6 @@ class CoursesController {
         });
       })
       .catch((e) => {
-        console.log(e);
         res.send('Error');
       });
   }
@@ -124,8 +126,7 @@ class CoursesController {
 
     if (typeof token !== 'undefined') {
       transaction = transactions[token];
-      console.log(transaction.detailOutput[0].responseCode);
-      if (transaction.detailOutput[0].responseCode === 0) {
+      if (transaction && transaction.detailOutput && transaction.detailOutput[0] && transaction.detailOutput[0].responseCode === 0) {
         status = 'AUTHORIZED';
       } else {
         status = 'REJECTED';
@@ -136,7 +137,7 @@ class CoursesController {
     if (status === null) {
       return res.status(404).send('Not found.');
     }
-
+    delete transactions[token]
     return res.render('finish', { transaction, status });
   }
 
