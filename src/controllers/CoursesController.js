@@ -79,16 +79,19 @@ class CoursesController {
     
     let Webpay = webPay();
     let url = process.env.NODE_URL || 'http://localhost:3000';
-    let amount = 1500;
-    let orderCount = await this.getUserOrderCount(req) + this.getRandomInt(10000, 99999);
+    const query = util.promisify(this.connection.query).bind(this.connection);
+    let result = await query(`SELECT * FROM course WHERE id=${req.params.id} limit 1;`);
+    let amount = (result[0].is_in_offer !== '2')? result[0].offer_price : result[0].price 
+    let orderCount =  await this.getUserOrderCount(req)
+
     Webpay.initTransaction(
       amount,
-      'Orden' + orderCount.toString(),
+      'Orden ' + orderCount.toString(),
       req.sessionId,
       url + '/courses/webpay-normal/response',
       url + '/courses/webpay-normal/finish'
     ).then((data) => {
-      transactions[data.token] = { amount: amount };
+      transactions[data.token] = { amount: amount, user: req.usuario.id, course: result[0].id }
       res.json({ url: data.url, token: data.token, inputName: 'TBK_TOKEN' });
     });
     
@@ -101,7 +104,9 @@ class CoursesController {
 
     Webpay.getTransactionResult(token)
       .then((response) => {
-        transactions[token] = response;
+        transactions[token] = Object.assign({},transactions[token],{
+          ...response
+        })
         res.render('redirect-transbank', {
           url: response.urlRedirection,
           token,
@@ -109,6 +114,7 @@ class CoursesController {
         });
       })
       .catch((e) => {
+        console.log(e)
         res.send('Error');
       });
   }
@@ -128,6 +134,13 @@ class CoursesController {
       transaction = transactions[token];
       if (transaction && transaction.detailOutput && transaction.detailOutput[0] && transaction.detailOutput[0].responseCode === 0) {
         status = 'AUTHORIZED';
+        const query = util.promisify(this.connection.query).bind(this.connection);
+        query(
+          `INSERT INTO course_user(user_id, course_id, status) VALUES(${transaction.user}, ${transaction.course}, '1')`,
+          (err, result) => {
+            if (err) console.log(err);
+          }
+        )
       } else {
         status = 'REJECTED';
       }
@@ -1272,7 +1285,6 @@ class CoursesController {
       `SELECT id, name FROM course WHERE id=${id} AND status=1`
     );
 
-    console.log(course);
 
     if (!course[0])
       return res.json({
