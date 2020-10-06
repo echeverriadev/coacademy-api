@@ -163,7 +163,7 @@ class ApplicationController {
       auth: {
         type: "login",
         user: "cursos@colaboral.com",
-        pass: "Cursos2020",
+        pass: "coacademy2020",
       },
       logger: true, // log to console
     });
@@ -374,7 +374,7 @@ class ApplicationController {
       auth: {
         type: "login",
         user: "cursos@colaboral.com",
-        pass: "Cursos2020",
+        pass: "coacademy2020",
       },
       logger: true, // log to console
     });

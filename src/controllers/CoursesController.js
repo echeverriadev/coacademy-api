@@ -91,7 +91,7 @@ class CoursesController {
       url + '/courses/webpay-normal/response',
       url + '/courses/webpay-normal/finish'
     ).then((data) => {
-      transactions[data.token] = { amount: amount, user: req.usuario.id, course: result[0].id }
+      transactions[data.token] = { amount: amount, user: req.usuario.id, course: result[0].id, email: req.usuario.email }
       res.json({ url: data.url, token: data.token, inputName: 'TBK_TOKEN' });
     });
     
@@ -135,12 +135,23 @@ class CoursesController {
       if (transaction && transaction.detailOutput && transaction.detailOutput[0] && transaction.detailOutput[0].responseCode === 0) {
         status = 'AUTHORIZED';
         const query = util.promisify(this.connection.query).bind(this.connection);
+
+        // User-Course association 
         query(
           `INSERT INTO course_user(user_id, course_id, status) VALUES(${transaction.user}, ${transaction.course}, '1')`,
           (err, result) => {
             if (err) console.log(err);
           }
         )
+
+        //Send email to admin
+
+        req.params.user_id = transaction.user
+        req.params.course_id = transaction.course
+
+        this.sendAdminBuyRequest(req, res);
+        this.sendUserBuyRequest(req, res);
+
       } else {
         status = 'REJECTED';
       }
@@ -154,6 +165,151 @@ class CoursesController {
     return res.render('finish', { transaction, status });
   }
 
+
+  async sendAdminBuyRequest(req, res, next) {
+    const { user_id, course_id } = req.params;
+
+    const query = util.promisify(this.connection.query).bind(this.connection);
+
+    const user = await query(
+      `SELECT users.id, email, name, phone, adress FROM users, user_profile WHERE user_profile.user_id = users.id and users.id='${user_id}'`
+    );
+
+    const course = await query(`SELECT id, name FROM course WHERE id=${course_id}`);
+
+    //config mail
+    var transporter = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com',
+      secure: false,
+      port: 587,
+      auth: {
+        type: 'login',
+        user: 'cursos@colaboral.com',
+        pass: 'coacademy2020',
+      },
+      logger: true, // log to console
+    });
+
+    transporter.use(
+      'compile',
+      hbs({
+        viewEngine: {
+          extName: '.hbs',
+          partialsDir: path.resolve(__dirname, `../templates/`),
+          layoutsDir: path.resolve(__dirname, `../templates/`),
+          defaultLayout: 'BuyAdminCourseRequest',
+        },
+        viewPath: path.resolve(__dirname, `../templates/`),
+      })
+    );
+
+    var mailOptionsAdmin = {
+      to: 'cursos@colaboral.com',
+      from: 'cursos@colaboral.com',
+      subject: `Solicitud de compra del curso ${course[0].name} usuario ${user[0].email}.`,
+      context: {
+        course_name: course[0].name,
+        email: user[0].email
+      },
+      attachments: [
+        {
+          filename: 'image1',
+          path: path.resolve(
+            __dirname,
+            `../templates/images/colaboral-color.png`
+          ),
+          cid: 'image1@image',
+        },
+      ],
+      template: 'BuyAdminCourseRequest',
+    };
+
+    transporter.sendMail(mailOptionsAdmin, async function (error) {
+      if (error) {
+        console.log(error);
+      } else {
+        console.log(user[0].email, 'success');
+      }
+    });
+  }
+
+  async sendUserBuyRequest(req, res) {
+    const { user_id, course_id } = req.params;
+
+    const query = util.promisify(this.connection.query).bind(this.connection);
+
+    const user = await query(
+      `SELECT users.id, name, email, phone, adress FROM users, user_profile WHERE user_profile.user_id = users.id and users.id='${user_id}'`
+    );
+    
+    const course = await query(
+      `SELECT id, name, is_in_offer, price, offer_price FROM course WHERE id=${course_id}`
+    );
+
+    //config mail
+    var transporter = nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com',
+      secure: false,
+      port: 587,
+      auth: {
+        type: 'login',
+        user: 'cursos@colaboral.com',
+        pass: 'coacademy2020',
+      },
+      logger: true, // log to console
+    });
+
+    transporter.use(
+      'compile',
+      hbs({
+        viewEngine: {
+          extName: '.hbs',
+          partialsDir: path.resolve(__dirname, `../templates/`),
+          layoutsDir: path.resolve(__dirname, `../templates/`),
+          defaultLayout: 'BuyUserCourseRequest',
+        },
+        viewPath: path.resolve(__dirname, `../templates/`),
+      })
+    );
+
+    const price =
+      parseInt(course[0].is_in_offer, 10) === 1
+        ? course[0].offer_price
+        : course[0].price;
+
+    let email = user[0].email
+
+    var mailOptionsUser = {
+      to: email,
+      from: 'me', //change this
+      subject: `Solicitud de compra del curso ${course[0].name}.`,
+      context: {
+        email,
+        course_name: course[0].name,
+        course_price: price,
+      },
+      attachments: [
+        {
+          filename: 'image1',
+          path: path.resolve(
+            __dirname,
+            `../templates/images/colaboral-color.png`
+          ),
+          cid: 'image1@image',
+        },
+      ],
+      template: 'BuyUserCourseRequest',
+    };
+
+    transporter.sendMail(mailOptionsUser, async function (error) {
+      if (error) {
+        console.log(error);
+      } else {
+        console.log(email, 'success');
+      }
+    });
+  }
+  
   async uppload(req, res, next) {
     req.body = JSON.parse(req.body.course);
 
@@ -1400,252 +1556,6 @@ class CoursesController {
         );
       }
     );
-  }
-
-  async sendAdminBuyRequest(req, res, next) {
-    const { id } = req.params;
-    var { email, comment } = req.body;
-
-    req.checkBody('email', 'El correo es necesario.').notEmpty();
-    let errors = req.validationErrors();
-
-    if (errors)
-      return res.status(200).json({
-        status: 500,
-        errors,
-      });
-
-    const query = util.promisify(this.connection.query).bind(this.connection);
-
-    const user = await query(
-      `SELECT users.id, name, phone, adress FROM users, user_profile WHERE user_profile.user_id = users.id and email='${email}'`
-    );
-
-    if (!user[0])
-      return res.json({
-        status: 500,
-        message: 'El usuario no existe.',
-      });
-
-    const course = await query(`SELECT id, name FROM course WHERE id=${id}`);
-
-    if (!course[0])
-      return res.json({
-        status: 500,
-        message: 'El curso no existe.',
-      });
-
-    //config mail
-    var transporter = nodemailer.createTransport({
-      host: 'smtp.mandrillapp.com',
-      secure: false,
-      port: 587,
-      auth: {
-        type: 'login',
-        user: 'cursos@colaboral.com',
-        pass: 'Cursos2020',
-      },
-      logger: true, // log to console
-    });
-
-    transporter.use(
-      'compile',
-      hbs({
-        viewEngine: {
-          extName: '.hbs',
-          partialsDir: path.resolve(__dirname, `../templates/`),
-          layoutsDir: path.resolve(__dirname, `../templates/`),
-          defaultLayout: 'BuyAdminCourseRequest',
-        },
-        viewPath: path.resolve(__dirname, `../templates/`),
-      })
-    );
-
-    comment = comment || '';
-
-    let token = jwt.sign(
-      {
-        user: Object.assign({
-          id: user[0].id,
-          email,
-        }),
-        course: course[0],
-      },
-      process.env.SEED
-    );
-
-    jwt.verify(token, process.env.SEED, (err, decoded) => {
-      if (err) {
-        return res.json({
-          status: 500,
-          message: 'Token no válido',
-        });
-      }
-
-      console.log(decoded);
-    });
-
-    const course_link = `${process.env.REACT_PORT}/courses/unblock?unblock_token=${token}`;
-
-    var mailOptionsAdmin = {
-      to: 'cursos@colaboral.com',
-      from: 'cursos@colaboral.com',
-      subject: `Solicitud de compra del curso ${course[0].name} usuario ${email}.`,
-      context: {
-        course_name: course[0].name,
-        email,
-        course_link,
-      },
-      attachments: [
-        {
-          filename: 'image1',
-          path: path.resolve(
-            __dirname,
-            `../templates/images/colaboral-color.png`
-          ),
-          cid: 'image1@image',
-        },
-      ],
-      template: 'BuyAdminCourseRequest',
-    };
-
-    console.log('sending...');
-    transporter.sendMail(mailOptionsAdmin, async function (error) {
-      if (error) {
-        console.log(error);
-        return res.json({ status: 500, message: 'No se pudo enviar el email' });
-      } else {
-        console.log(email, 'success');
-      }
-    });
-
-    next();
-  }
-
-  async sendUserBuyRequest(req, res) {
-    const { id } = req.params;
-    var { email, comment } = req.body;
-
-    const bank_account = '0108 0050 1121 12 1111 0000';
-    const bank_account_owner = 'Colaboral';
-    const pay_email = 'cursos@colaboral.com';
-    const pay_phone = '+56123456789';
-
-    req.checkBody('email', 'El correo es necesario.').notEmpty();
-    let errors = req.validationErrors();
-
-    if (errors)
-      return res.status(200).json({
-        status: 500,
-        errors,
-      });
-
-    const query = util.promisify(this.connection.query).bind(this.connection);
-
-    const user = await query(
-      `SELECT users.id, name, phone, adress FROM users, user_profile WHERE user_profile.user_id = users.id and email='${email}'`
-    );
-
-    if (!user[0])
-      return res.json({
-        status: 500,
-        message: 'El usuario no existe.',
-      });
-
-    const course = await query(
-      `SELECT id, name, is_in_offer, price, offer_price FROM course WHERE id=${id}`
-    );
-
-    if (!course[0])
-      return res.json({
-        status: 500,
-        message: 'El curso no existe.',
-      });
-
-    //config mail
-    var transporter = nodemailer.createTransport({
-      host: 'smtp.mandrillapp.com',
-      secure: false,
-      port: 587,
-      auth: {
-        type: 'login',
-        user: 'cursos@colaboral.com',
-        pass: 'Cursos2020',
-      },
-      logger: true, // log to console
-    });
-
-    transporter.use(
-      'compile',
-      hbs({
-        viewEngine: {
-          extName: '.hbs',
-          partialsDir: path.resolve(__dirname, `../templates/`),
-          layoutsDir: path.resolve(__dirname, `../templates/`),
-          defaultLayout: 'BuyUserCourseRequest',
-        },
-        viewPath: path.resolve(__dirname, `../templates/`),
-      })
-    );
-
-    comment = comment || '';
-
-    const price =
-      parseInt(course[0].is_in_offer, 10) === 1
-        ? course[0].offer_price
-        : course[0].price;
-
-    var mailOptionsUser = {
-      to: email,
-      from: 'me', //change this
-      subject: `Solicitud de compra del curso ${course[0].name}.`,
-      context: {
-        email,
-        course_name: course[0].name,
-        course_price: price,
-        bank_account,
-        bank_account_owner,
-        pay_email,
-        pay_phone,
-      },
-      attachments: [
-        {
-          filename: 'image1',
-          path: path.resolve(
-            __dirname,
-            `../templates/images/colaboral-color.png`
-          ),
-          cid: 'image1@image',
-        },
-      ],
-      template: 'BuyUserCourseRequest',
-    };
-
-    transporter.sendMail(mailOptionsUser, async function (error) {
-      if (error) {
-        console.log(error);
-        return res.json({ status: 500, message: 'No se pudo enviar el email' });
-      } else {
-        console.log(email, 'success');
-
-        await query(
-          `INSERT INTO course_user(user_id, course_id, comment) VALUES(${user[0].id}, ${course[0].id}, '${comment}')`,
-          (err, result) => {
-            console.log(err, result);
-            if (err)
-              return res.status(500).json({
-                status: 500,
-                message: err,
-              });
-
-            return res.json({
-              status: 200,
-              message: 'Se ha enviado tu solicitud exitosamente.',
-            });
-          }
-        );
-      }
-    });
   }
 
   async unblockCourseToUser(req, res) {
