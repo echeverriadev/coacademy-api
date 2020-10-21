@@ -84,7 +84,7 @@ class CoursesController {
     let amount = (result[0].is_in_offer !== '2')? result[0].offer_price : result[0].price 
     let orderCount =  await this.getUserOrderCount(req)
 
-    Webpay.initTransaction(
+    Webpay.generalInitTransaction(
       amount,
       'Orden ' + orderCount.toString(),
       req.sessionId,
@@ -102,7 +102,7 @@ class CoursesController {
 
     let token = Object.keys(transactions)[0];
 
-    Webpay.getTransactionResult(token)
+    Webpay.generalGetTransactionResult(token)
       .then((response) => {
         transactions[token] = Object.assign({},transactions[token],{
           ...response
