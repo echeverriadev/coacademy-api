@@ -106,7 +106,11 @@ class CoursesController {
       .then((response) => {
         transactions[token] = Object.assign({},transactions[token],{
           ...response
-        })
+        })  
+
+        return Webpay.acknowledgeTransaction(token);
+      })
+      .then((result) => {
         res.render('redirect-transbank', {
           url: response.urlRedirection,
           token,
