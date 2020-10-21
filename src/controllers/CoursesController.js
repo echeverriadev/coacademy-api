@@ -112,15 +112,12 @@ class CoursesController {
           ...response
         })  
 
-        return response;
-      })
-      .then((result) => {
-        console.log(result);
-        res.render('redirect-transbank', {
+        return res.render('redirect-transbank', {
           url: result.urlRedirection,
           token,
           inputName: 'token_ws',
         });
+        
       })
       .catch((e) => {
         console.log(e)
