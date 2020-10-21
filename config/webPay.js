@@ -16,8 +16,7 @@ var Transaction = function () {
                         .withPrivateCert(privateFileString)
                         .withPublicCert(publicFileString)
                         .usingEnvironment(Transbank.environments.production) 
-    // const transaction = new Transbank.Webpay(configuration).getNormalTransaction();
-    const transaction = new Transbank.Webpay(configuration);
+    const transaction = new Transbank.Webpay(configuration).getNormalTransaction();
     return transaction;
 }
 
