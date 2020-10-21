@@ -99,6 +99,34 @@ class CoursesController {
     
   }
 
+  async requestTransbank(trans_response, token){
+
+    return new Promise((resolve, reject) => {
+
+      var options = { 
+        method: 'POST',
+        url: trans_response.urlRedirection,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({token_ws: token})
+      };
+      
+      request(options, function (error, response, body) {
+          
+          if (error) return reject(error);
+          
+          let resp = JSON.parse(body)
+
+          if(resp.error)
+              return reject(resp)
+
+          return resolve({resp: JSON.parse(body)})
+      })
+
+    })
+  }
+
   async responseWebPay(req, res) {
     let Webpay = webPay();
 
@@ -113,30 +141,10 @@ class CoursesController {
           ...response
         })
 
-        var options = { 
-            method: 'POST',
-            url: response.urlRedirection,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({token_ws: token})
-        };
-        
-        await request(options, function (error, response, body) {
-            
-            if (error) return reject(error);
-            
-            let resp = JSON.parse(body)
+        let result = await this.requestTransbank(response, token);
 
-            if(resp.error)
-                return reject(resp)
+        console.log(result)
 
-            return resolve({resp: JSON.parse(body)})
-        }).then((result) => {
-
-          console.log(result)
-
-        }); 
       })
       .catch((e) => {
         console.log(e)
