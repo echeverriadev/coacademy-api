@@ -111,6 +111,7 @@ class CoursesController {
         return Webpay.acknowledgeTransaction(token);
       })
       .then((result) => {
+        console.log(result);
         res.render('redirect-transbank', {
           url: response.urlRedirection,
           token,
