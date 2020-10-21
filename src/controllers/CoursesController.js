@@ -11,6 +11,7 @@ const fs = require('fs');
 const webPay = require('../../config/webPay');
 var transactions = {};
 require('../../config/enviroments');
+let request = require('request')
 
 class CoursesController {
   constructor() {
@@ -106,18 +107,36 @@ class CoursesController {
     console.log("TOKEN", token)
 
     Webpay.getTransactionResult(token)
-      .then((response) => {
+      .then(async(response) => {
         console.log("GENERAL_TRANSACTION_RESULT", response)
         transactions[token] = Object.assign({},transactions[token],{
           ...response
-        })  
+        })
 
-        res.render('redirect-transbank', {
-          url: response.urlRedirection,
-          token,
-          inputName: 'token_ws',
-        });
+        var options = { 
+            method: 'POST',
+            url: response.urlRedirection,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({token_ws: token})
+        };
         
+        await request(options, function (error, response, body) {
+            
+            if (error) return reject(error);
+            
+            let resp = JSON.parse(body)
+
+            if(resp.error)
+                return reject(resp)
+
+            return resolve({resp: JSON.parse(body)})
+        }).then((result) => {
+
+          console.log(result)
+
+        }); 
       })
       .catch((e) => {
         console.log(e)
