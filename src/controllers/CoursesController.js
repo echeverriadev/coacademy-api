@@ -169,7 +169,7 @@ class CoursesController {
       return res.status(404).send('Not found.');
     }
     delete transactions[token]
-    return res.render('finish', { transaction, status });
+    return res.render(path.resolve(__dirname, "../../views/finish.ejs"), { transaction, status });
   }
 
 
