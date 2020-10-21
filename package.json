@@ -23,6 +23,7 @@
         "nodemailer-express-handlebars": "^3.1.0",
         "nodemon": "^2.0.1",
         "transbank-sdk": "^1.0.2",
-        "underscore": "^1.8.3"
+        "underscore": "^1.8.3",
+        "webpay-nodejs": "^1.4.0"
     }
 }
