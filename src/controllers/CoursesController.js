@@ -108,7 +108,7 @@ class CoursesController {
           ...response
         })  
 
-        return Webpay.acknowledgeTransaction(token);
+        return Webpay.generalAcknowledgeTransaction(token);
       })
       .then((result) => {
         console.log(result);
