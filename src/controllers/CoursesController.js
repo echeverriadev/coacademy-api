@@ -91,6 +91,7 @@ class CoursesController {
       url + '/courses/webpay-normal/response',
       url + '/courses/webpay-normal/finish'
     ).then((data) => {
+      console.log("GENERAL_TRANSACTION", data)
       transactions[data.token] = { amount: amount, user: req.usuario.id, course: result[0].id, email: req.usuario.email }
       res.json({ url: data.url, token: data.token, inputName: 'TBK_TOKEN' });
     });
@@ -102,8 +103,11 @@ class CoursesController {
 
     let token = Object.keys(transactions)[0];
 
+    console.log("TOKEN", token)
+
     Webpay.generalGetTransactionResult(token)
       .then((response) => {
+        console.log("GENERAL_TRANSACTION_RESULT", response)
         transactions[token] = Object.assign({},transactions[token],{
           ...response
         })  
