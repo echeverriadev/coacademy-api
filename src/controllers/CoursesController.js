@@ -112,7 +112,7 @@ class CoursesController {
           ...response
         })  
 
-        return res.render('redirect-transbank', {
+        res.render('redirect-transbank', {
           url: response.urlRedirection,
           token,
           inputName: 'token_ws',
