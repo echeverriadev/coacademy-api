@@ -12,10 +12,10 @@ process.env.NODE_URL =
 // ============================
 
 process.env.DB_HOST =
-  process.env.DB_HOST || 'course-db.cgxnznbxddwm.us-west-1.rds.amazonaws.com';
+  process.env.DB_HOST || 'coacademydb.cgxnznbxddwm.us-west-1.rds.amazonaws.com';
 process.env.DB_USER = process.env.DB_USER || 'adminDBCoacademy';
 process.env.DB_PASS = process.env.DB_PASS || 'y2EOuYwUvk6uhU6Ye8iW';
-process.env.DB_NAME = process.env.DB_NAME || 'coacademy';
+process.env.DB_NAME = process.env.DB_NAME || 'coacademydb';
 
 // ============================
 //  ENVIROMENT
