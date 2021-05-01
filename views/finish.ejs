@@ -34,7 +34,7 @@
             <% } %>
             <div class="border-solid border-t border-gray-400 mt-8 pt-8">
                 <h3>Email: <%= JSON.stringify(transaction.email, null, 2) %></h3>
-                <p>Monto pagado: <%= JSON.stringify(transaction.amount, null, 2) %> $</p>
+                <p>Monto pagado: $<%= JSON.stringify(transaction.amount, null, 2) %></p>
                 <% fecha = new Date() %>
                 <p>Fecha: <%= fecha.toLocaleDateString() %></p>
                 <div class="webpay-oneclick mt-4">
