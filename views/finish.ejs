@@ -20,7 +20,7 @@
                 <h4 class="text-2xl font-bold text-green-500">
                     Transacción exitosa
                 </h4>
-                <p>La transacción ha sido aprobada ya que transaction.detailOutput[0].responseCode es igual a cero</p>
+                <p>Su pago ha sido procesado exitosamente</p>
             <% } else if(status == 'REJECTED') { %>
                 <h4 class="text-2xl font-bold text-red-600">
                     Transacción rechazada
@@ -33,9 +33,11 @@
                 <p>Has cancelado la transacción ¿deseas intentarlo nuevamente? </p>
             <% } %>
             <div class="border-solid border-t border-gray-400 mt-8 pt-8">
-                <pre><%= JSON.stringify(transaction, null, 2) %></pre>
+                <h3>Email: <%= JSON.stringify(transaction.email, null, 2) %></h3>
+                <p>Monto pagado: <%= JSON.stringify(transaction.amount, null, 2) %></p>
+                <p>Fecha: <%= fecha = new Date; fecha.toLocaleDateString() %></p>
                 <div class="webpay-oneclick mt-4">
-                    <span><a class="text-blue-600 hover:no-underline underline" href="http://localhost:3001">Ir al menu principal</a></span>
+                    <span><a class="text-blue-600 hover:no-underline underline" href="https://coacademy.cl">Ir al menu principal</a></span>
                 </div>
             </div>
 
