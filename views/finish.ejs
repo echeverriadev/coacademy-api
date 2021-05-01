@@ -35,7 +35,8 @@
             <div class="border-solid border-t border-gray-400 mt-8 pt-8">
                 <h3>Email: <%= JSON.stringify(transaction.email, null, 2) %></h3>
                 <p>Monto pagado: <%= JSON.stringify(transaction.amount, null, 2) %></p>
-                <p>Fecha: <%= fecha = new Date; fecha.toLocaleDateString() %></p>
+                <% fecha = new Date() %>
+                <p>Fecha: <%= fecha.toLocaleDateString() %></p>
                 <div class="webpay-oneclick mt-4">
                     <span><a class="text-blue-600 hover:no-underline underline" href="https://coacademy.cl">Ir al menu principal</a></span>
                 </div>
