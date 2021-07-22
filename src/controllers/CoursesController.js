@@ -9,8 +9,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const webPay = require('../../config/webPay');
-let transactions = {};
-let transactionsByToken = {};
+var transactions = {};
 require('../../config/enviroments');
 let request = require('request')
 
@@ -104,31 +103,12 @@ class CoursesController {
     let Webpay = webPay();
 
     let token = Object.keys(transactions)[0];
-    let transaction;
+
     console.log("TOKEN", token)
 
-    Webpay.getTransactionResult(token).then(async (transactionResult) => {
-      transaction = transactionResult;
-      console.log('transaction', transaction);
-      transactions[transaction.buyOrder] = transaction;
-      console.log('transactionBuyOrder', transactions[transaction.buyOrder]);
-      transactionsByToken[token] = transactions[transaction.buyOrder];
-  
-      console.log('transaction', transaction);
-      /**
-       * 4. Como resultado, obtendras transaction, que es un objeto con la información de la transacción.
-       * Independiente de si la transacción fue correcta o errónea, debes siempre
-       * hacer un llamado a acknowledgeTransaction con el token... Cosas de Transbank.
-       *
-       * Tienes 30 amplios segundos para hacer esto, sino la transacción se reversará.
-       */
-      console.log('re acknowledgeTransaction', token)
-      //return Webpay.acknowledgeTransaction(token);
-      const resp = await Webpay.commit(token);
-      console.log('Commit transaction', resp)
-      return resp
-    }).then((response) => {
-      console.log('pos acknowledgeTransaction', response);
+    Webpay.getTransactionResult(token)
+      .then(async(response) => {
+        console.log("GENERAL_TRANSACTION_RESULT", response)
         transactions[token] = Object.assign({},transactions[token],{
           ...response
         })
