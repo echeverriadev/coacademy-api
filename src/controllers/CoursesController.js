@@ -106,9 +106,24 @@ class CoursesController {
 
     console.log("TOKEN", token)
 
-    Webpay.getTransactionResult(token)
-      .then(async(response) => {
-        console.log("GENERAL_TRANSACTION_RESULT", response)
+    Webpay.getTransactionResult(token).then((transactionResult) => {
+      transaction = transactionResult;
+      transactions[transaction.buyOrder] = transaction;
+      transactionsByToken[token] = transactions[transaction.buyOrder];
+  
+      console.log('transaction', transaction);
+      /**
+       * 4. Como resultado, obtendras transaction, que es un objeto con la información de la transacción.
+       * Independiente de si la transacción fue correcta o errónea, debes siempre
+       * hacer un llamado a acknowledgeTransaction con el token... Cosas de Transbank.
+       *
+       * Tienes 30 amplios segundos para hacer esto, sino la transacción se reversará.
+       */
+      console.log('re acknowledgeTransaction', token)
+      return Webpay.acknowledgeTransaction(token);
+  
+    }).then((response) => {
+      console.log('pos acknowledgeTransaction', response);
         transactions[token] = Object.assign({},transactions[token],{
           ...response
         })
