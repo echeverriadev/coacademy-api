@@ -110,8 +110,7 @@ class CoursesController {
 
     Webpay.getTransactionResult(token)
       .then((response) => {
-
-        console.log('INSIDE RESPONSE');
+        console.log('INSIDE RESPONSE', response);
         const output = response.detailOutput[0];
         console.log('OUTPUT', output);
         if (output.responseCode === 0) {
