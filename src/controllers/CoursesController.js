@@ -107,7 +107,7 @@ class CoursesController {
     let transaction;
     console.log("TOKEN", token)
 
-    Webpay.getTransactionResult(token).then((transactionResult) => {
+    Webpay.getTransactionResult(token).then(async (transactionResult) => {
       transaction = transactionResult;
       console.log('transaction', transaction);
       transactions[transaction.buyOrder] = transaction;
@@ -123,8 +123,10 @@ class CoursesController {
        * Tienes 30 amplios segundos para hacer esto, sino la transacción se reversará.
        */
       console.log('re acknowledgeTransaction', token)
-      return Webpay.acknowledgeTransaction(token);
-  
+      //return Webpay.acknowledgeTransaction(token);
+      const resp = await Webpay.commit(token);
+      console.log('Commit transaction', resp)
+      return resp
     }).then((response) => {
       console.log('pos acknowledgeTransaction', response);
         transactions[token] = Object.assign({},transactions[token],{
