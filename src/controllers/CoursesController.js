@@ -9,7 +9,8 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const webPay = require('../../config/webPay');
-var transactions = {};
+let transactions = {};
+let transactionsByToken = {};
 require('../../config/enviroments');
 let request = require('request')
 
@@ -103,12 +104,14 @@ class CoursesController {
     let Webpay = webPay();
 
     let token = Object.keys(transactions)[0];
-
+    let transaction;
     console.log("TOKEN", token)
 
     Webpay.getTransactionResult(token).then((transactionResult) => {
       transaction = transactionResult;
+      console.log('transaction', transaction);
       transactions[transaction.buyOrder] = transaction;
+      console.log('transactionBuyOrder', transactions[transaction.buyOrder]);
       transactionsByToken[token] = transactions[transaction.buyOrder];
   
       console.log('transaction', transaction);
