@@ -104,10 +104,20 @@ class CoursesController {
 
     let token = Object.keys(transactions)[0];
 
+    const tokenws = req.body.token_ws;
     console.log("TOKEN", token)
+    console.log("TOKENWS", tokenws)
 
     Webpay.getTransactionResult(token)
-      .then(async(response) => {
+      .then((response) => {
+
+        console.log('INSIDE RESPONSE');
+        const output = response.detailOutput[0];
+        console.log('OUTPUT', output);
+        if (output.responseCode === 0) {
+          // La transacción se ha realizado correctamente
+          console.log('EXITOSO')
+        }
         console.log("GENERAL_TRANSACTION_RESULT", response)
         transactions[token] = Object.assign({},transactions[token],{
           ...response
